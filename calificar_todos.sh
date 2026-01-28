@@ -2,8 +2,8 @@
 
 # ============================================
 # SCRIPT DE CALIFICACIÓN AUTOMÁTICA - TODOS LOS ESTUDIANTES
-# Ejecuta desde main, califica todas las ramas student/*
-# Genera JSON, CSV, reportes individuales
+# Califica solo la arquitectura (100 pts)
+# La replicación se valida con capturas de pantalla
 # ============================================
 
 # Colores
@@ -42,10 +42,10 @@ print_banner() {
     echo "╚═══════════════════════════════════════════════════════════════╝"
     echo -e "${NC}"
     echo ""
-    echo -e "${BLUE}Este script calificará automáticamente a TODOS los estudiantes${NC}"
-    echo -e "${BLUE}que hayan subido su rama al repositorio.${NC}"
+    echo -e "${BLUE}Este script califica la ARQUITECTURA (100 pts)${NC}"
+    echo -e "${YELLOW}La replicación se valida con capturas de pantalla (ver README)${NC}"
     echo ""
-    echo -e "${YELLOW}Resultados se guardarán en: ${BOLD}$RESULTS_DIR/${NC}"
+    echo -e "${YELLOW}Resultados en: ${BOLD}$RESULTS_DIR/${NC}"
     echo ""
 }
 
@@ -58,7 +58,7 @@ calificar_estudiante() {
     local student_name=""
     local student_id=""
     
-    # Extraer información del nombre de la rama
+    # Extraer información
     if [[ $branch =~ student/(.+)_(.+)_([0-9]+) ]]; then
         local nombre="${BASH_REMATCH[1]}"
         local apellido="${BASH_REMATCH[2]}"
@@ -81,184 +81,192 @@ calificar_estudiante() {
     
     # Variables de puntuación
     local docker_compose_pts=0
-    local containers_pts=0
-    local databases_pts=0
+    local contenedores_pts=0
+    local configuracion_pts=0
+    local bd_funcionamiento_pts=0
     local symmetricds_pts=0
-    local replication_pts=0
     local total_pts=0
     local tests_passed=0
-    local tests_total=20
+    local tests_total=14
     
-    # ========== VALIDACIÓN 1: Docker Compose (20pts) ==========
+    # ========== 1. DOCKER COMPOSE (30 pts) ==========
     echo -e "${YELLOW}[1/5]${NC} Validando Docker Compose..."
     
-    if [ ! -f "docker-compose.yml" ]; then
-        echo -e "${RED}  ✗ docker-compose.yml no existe${NC}"
-    else
-        ((docker_compose_pts+=5))
+    # 1.1 Archivo existe (10pts)
+    if [ -f "docker-compose.yml" ]; then
+        ((docker_compose_pts+=10))
         ((tests_passed++))
+        echo -e "${GREEN}  ✓ Archivo existe (+10pts)${NC}"
         
+        # 1.2 Sintaxis válida (10pts)
         if docker compose config > /dev/null 2>&1; then
-            ((docker_compose_pts+=5))
+            ((docker_compose_pts+=10))
             ((tests_passed++))
+            echo -e "${GREEN}  ✓ Sintaxis YAML válida (+10pts)${NC}"
             
-            # Verificar servicios
+            # 1.3 4 servicios (10pts - 2.5 c/u)
             local config_output=$(docker compose config 2>/dev/null)
-            if echo "$config_output" | grep -q "postgres-america:" && \
-               echo "$config_output" | grep -q "mysql-europe:"; then
-                ((docker_compose_pts+=5))
+            local services_pts=0
+            
+            if echo "$config_output" | grep -q "postgres-america:"; then
+                ((services_pts+=3))
                 ((tests_passed++))
             fi
             
-            if echo "$config_output" | grep -q "symmetricds-america:" && \
-               echo "$config_output" | grep -q "symmetricds-europe:"; then
-                ((docker_compose_pts+=5))
+            if echo "$config_output" | grep -q "mysql-europe:"; then
+                ((services_pts+=2))
                 ((tests_passed++))
             fi
+            
+            if echo "$config_output" | grep -q "symmetricds-america:"; then
+                ((services_pts+=3))
+                ((tests_passed++))
+            fi
+            
+            if echo "$config_output" | grep -q "symmetricds-europe:"; then
+                ((services_pts+=2))
+                ((tests_passed++))
+            fi
+            
+            ((docker_compose_pts+=services_pts))
+            echo -e "${GREEN}  ✓ Servicios definidos (+${services_pts}pts)${NC}"
+        else
+            echo -e "${RED}  ✗ Sintaxis YAML inválida (0pts)${NC}"
         fi
+    else
+        echo -e "${RED}  ✗ Archivo no existe (0pts)${NC}"
     fi
-    echo -e "${GREEN}  ✓ Docker Compose: $docker_compose_pts / 20 pts${NC}"
     
-    # ========== VALIDACIÓN 2: Contenedores (20pts) ==========
+    echo -e "${BLUE}  Subtotal: ${BOLD}$docker_compose_pts / 30 pts${NC}"
+    
+    # ========== 2. CONTENEDORES (25 pts) ==========
     echo -e "${YELLOW}[2/5]${NC} Levantando y validando contenedores..."
     
-    # Limpiar ambiente previo
+    # Limpiar ambiente
     docker compose down -v > /dev/null 2>&1 || true
     
     if docker compose up -d > /dev/null 2>&1; then
-        sleep 60  # Esperar inicialización
+        echo -e "${BLUE}  Esperando 60 segundos...${NC}"
+        sleep 60
         
+        # 2.1 PostgreSQL (6pts)
         if docker compose ps | grep -q "postgres-america.*Up"; then
-            ((containers_pts+=5))
+            ((contenedores_pts+=6))
             ((tests_passed++))
+            echo -e "${GREEN}  ✓ postgres-america corriendo (+6pts)${NC}"
+        else
+            echo -e "${RED}  ✗ postgres-america no corriendo (0pts)${NC}"
         fi
         
+        # 2.2 MySQL (6pts)
         if docker compose ps | grep -q "mysql-europe.*Up"; then
-            ((containers_pts+=5))
+            ((contenedores_pts+=6))
             ((tests_passed++))
+            echo -e "${GREEN}  ✓ mysql-europe corriendo (+6pts)${NC}"
+        else
+            echo -e "${RED}  ✗ mysql-europe no corriendo (0pts)${NC}"
         fi
         
+        # 2.3 SymmetricDS América (7pts)
         if docker compose ps | grep -q "symmetricds-america.*Up"; then
-            ((containers_pts+=5))
+            ((contenedores_pts+=7))
             ((tests_passed++))
+            echo -e "${GREEN}  ✓ symmetricds-america corriendo (+7pts)${NC}"
+        else
+            echo -e "${RED}  ✗ symmetricds-america no corriendo (0pts)${NC}"
         fi
         
+        # 2.4 SymmetricDS Europa (6pts)
         if docker compose ps | grep -q "symmetricds-europe.*Up"; then
-            ((containers_pts+=5))
+            ((contenedores_pts+=6))
             ((tests_passed++))
+            echo -e "${GREEN}  ✓ symmetricds-europe corriendo (+6pts)${NC}"
+        else
+            echo -e "${RED}  ✗ symmetricds-europe no corriendo (0pts)${NC}"
         fi
+    else
+        echo -e "${RED}  ✗ Error al levantar servicios (0pts)${NC}"
     fi
-    echo -e "${GREEN}  ✓ Contenedores: $containers_pts / 20 pts${NC}"
     
-    # ========== VALIDACIÓN 3: Bases de Datos (15pts) ==========
+    echo -e "${BLUE}  Subtotal: ${BOLD}$contenedores_pts / 25 pts${NC}"
+    
+    # ========== 3. BASES DE DATOS (20 pts) ==========
     echo -e "${YELLOW}[3/5]${NC} Validando bases de datos..."
     
+    # 3.1 Conexión PostgreSQL (7pts)
     if docker exec postgres-america psql -U symmetricds -d globalshop -c "SELECT 1;" > /dev/null 2>&1; then
-        ((databases_pts+=5))
+        ((bd_funcionamiento_pts+=7))
         ((tests_passed++))
+        echo -e "${GREEN}  ✓ Conexión PostgreSQL (+7pts)${NC}"
+    else
+        echo -e "${RED}  ✗ Sin conexión PostgreSQL (0pts)${NC}"
     fi
     
+    # 3.2 Tablas en PostgreSQL (6pts)
     local pg_tables=$(docker exec postgres-america psql -U symmetricds -d globalshop -t -c \
         "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('products','inventory','customers','promotions');" 2>/dev/null | tr -d ' ')
     if [ "$pg_tables" = "4" ]; then
-        ((databases_pts+=5))
+        ((bd_funcionamiento_pts+=6))
         ((tests_passed++))
+        echo -e "${GREEN}  ✓ 4 tablas en PostgreSQL (+6pts)${NC}"
+    else
+        echo -e "${RED}  ✗ Tablas faltantes: $pg_tables/4 (0pts)${NC}"
     fi
     
+    # 3.3 Conexión MySQL (7pts)
     if docker exec mysql-europe mysql -u symmetricds -psymmetricds globalshop -e "SELECT 1;" > /dev/null 2>&1; then
-        ((databases_pts+=5))
+        ((bd_funcionamiento_pts+=7))
         ((tests_passed++))
+        echo -e "${GREEN}  ✓ Conexión MySQL (+7pts)${NC}"
+    else
+        echo -e "${RED}  ✗ Sin conexión MySQL (0pts)${NC}"
     fi
-    echo -e "${GREEN}  ✓ Bases de Datos: $databases_pts / 15 pts${NC}"
     
-    # ========== VALIDACIÓN 4: SymmetricDS (15pts) ==========
+    echo -e "${BLUE}  Subtotal: ${BOLD}$bd_funcionamiento_pts / 20 pts${NC}"
+    
+    # ========== 4. SYMMETRICDS (25 pts) ==========
     echo -e "${YELLOW}[4/5]${NC} Validando SymmetricDS..."
     
+    # 4.1 Tablas SymmetricDS en PostgreSQL (10pts)
     local sym_tables=$(docker exec postgres-america psql -U symmetricds -d globalshop -t -c \
         "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='public' AND table_name LIKE 'sym_%';" 2>/dev/null | tr -d ' ')
     if [ "$sym_tables" -gt 30 ]; then
-        ((symmetricds_pts+=5))
+        ((symmetricds_pts+=10))
         ((tests_passed++))
+        echo -e "${GREEN}  ✓ Tablas SymmetricDS en PostgreSQL: $sym_tables (+10pts)${NC}"
+    else
+        echo -e "${RED}  ✗ Tablas SymmetricDS insuficientes: $sym_tables (0pts)${NC}"
     fi
     
+    # 4.2 Tablas SymmetricDS en MySQL (10pts)
     local sym_tables_mysql=$(docker exec mysql-europe mysql -u symmetricds -psymmetricds globalshop -N -e \
         "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='globalshop' AND table_name LIKE 'sym_%';" 2>/dev/null)
     if [ "$sym_tables_mysql" -gt 30 ]; then
-        ((symmetricds_pts+=5))
+        ((symmetricds_pts+=10))
         ((tests_passed++))
+        echo -e "${GREEN}  ✓ Tablas SymmetricDS en MySQL: $sym_tables_mysql (+10pts)${NC}"
+    else
+        echo -e "${RED}  ✗ Tablas SymmetricDS insuficientes: $sym_tables_mysql (0pts)${NC}"
     fi
     
+    # 4.3 Grupos de nodos configurados (5pts)
     local node_groups=$(docker exec postgres-america psql -U symmetricds -d globalshop -t -c \
         "SELECT COUNT(*) FROM sym_node_group;" 2>/dev/null | tr -d ' ')
     if [ "$node_groups" -ge 2 ]; then
         ((symmetricds_pts+=5))
         ((tests_passed++))
-    fi
-    echo -e "${GREEN}  ✓ SymmetricDS: $symmetricds_pts / 15 pts${NC}"
-    
-    # ========== VALIDACIÓN 5: Replicación (30pts) ==========
-    echo -e "${YELLOW}[5/5]${NC} Validando replicación bidireccional..."
-    
-    sleep 15
-    
-    # Limpiar datos previos
-    docker exec postgres-america psql -U symmetricds -d globalshop -c \
-        "DELETE FROM products WHERE product_id LIKE 'CAL-%';" > /dev/null 2>&1
-    docker exec mysql-europe mysql -u symmetricds -psymmetricds globalshop -e \
-        "DELETE FROM products WHERE product_id LIKE 'CAL-%';" > /dev/null 2>&1
-    sleep 5
-    
-    # Test INSERT PG → MySQL (10pts)
-    docker exec postgres-america psql -U symmetricds -d globalshop -c \
-        "INSERT INTO products VALUES ('CAL-PG-001', 'Test PG', 'Test', 99.99, 'Test', true, NOW(), NOW());" > /dev/null 2>&1
-    sleep 15
-    local count_my=$(docker exec mysql-europe mysql -u symmetricds -psymmetricds globalshop -N -e \
-        "SELECT COUNT(*) FROM products WHERE product_id = 'CAL-PG-001';" 2>/dev/null)
-    if [ "$count_my" = "1" ]; then
-        ((replication_pts+=10))
-        ((tests_passed++))
+        echo -e "${GREEN}  ✓ Grupos de nodos: $node_groups (+5pts)${NC}"
+    else
+        echo -e "${RED}  ✗ Grupos insuficientes: $node_groups (0pts)${NC}"
     fi
     
-    # Test INSERT MY → PG (10pts)
-    docker exec mysql-europe mysql -u symmetricds -psymmetricds globalshop -e \
-        "INSERT INTO products VALUES ('CAL-MY-001', 'Test MY', 'Test', 149.99, 'Test', 1, NOW(), NOW());" > /dev/null 2>&1
-    sleep 15
-    local count_pg=$(docker exec postgres-america psql -U symmetricds -d globalshop -t -A -c \
-        "SELECT COUNT(*) FROM products WHERE product_id = 'CAL-MY-001';" 2>/dev/null)
-    if [ "$count_pg" = "1" ]; then
-        ((replication_pts+=10))
-        ((tests_passed++))
-    fi
-    
-    # Test UPDATE PG → MY (5pts)
-    docker exec postgres-america psql -U symmetricds -d globalshop -c \
-        "UPDATE products SET base_price = 88.88 WHERE product_id = 'CAL-PG-001';" > /dev/null 2>&1
-    sleep 15
-    local price_my=$(docker exec mysql-europe mysql -u symmetricds -psymmetricds globalshop -N -e \
-        "SELECT base_price FROM products WHERE product_id = 'CAL-PG-001';" 2>/dev/null)
-    if [ "$price_my" = "88.88" ]; then
-        ((replication_pts+=5))
-        ((tests_passed++))
-    fi
-    
-    # Test DELETE MY → PG (5pts)
-    docker exec mysql-europe mysql -u symmetricds -psymmetricds globalshop -e \
-        "DELETE FROM products WHERE product_id = 'CAL-MY-001';" > /dev/null 2>&1
-    sleep 15
-    local del_pg=$(docker exec postgres-america psql -U symmetricds -d globalshop -t -A -c \
-        "SELECT COUNT(*) FROM products WHERE product_id = 'CAL-MY-001';" 2>/dev/null)
-    if [ "$del_pg" = "0" ]; then
-        ((replication_pts+=5))
-        ((tests_passed++))
-    fi
-    
-    echo -e "${GREEN}  ✓ Replicación: $replication_pts / 30 pts${NC}"
+    echo -e "${BLUE}  Subtotal: ${BOLD}$symmetricds_pts / 25 pts${NC}"
     
     # ========== CALCULAR TOTAL ==========
-    total_pts=$((docker_compose_pts + containers_pts + databases_pts + symmetricds_pts + replication_pts))
+    total_pts=$((docker_compose_pts + contenedores_pts + bd_funcionamiento_pts + symmetricds_pts))
     local percentage=$((total_pts * 100 / 100))
     
-    # Determinar nota y aprobación
+    # Determinar nota
     local nota=""
     local aprobado="false"
     if [ $percentage -ge 90 ]; then
@@ -283,12 +291,14 @@ calificar_estudiante() {
         ((REPROBADOS++))
     fi
     
-    # Mostrar resultado
     echo ""
-    echo -e "${BOLD}Resultado:${NC} $total_pts / 100 pts - ${nota}"
+    echo -e "${BOLD}Resultado: $total_pts / 100 pts - ${nota}${NC}"
+    echo -e "${YELLOW}Nota: La replicación debe demostrarse con capturas de pantalla${NC}"
     echo ""
     
-    # Guardar para JSON consolidado
+    ((SUMA_CALIFICACIONES+=total_pts))
+    
+    # Guardar para JSON
     ESTUDIANTES+=("{
       \"nombre\": \"$student_name\",
       \"cedula\": \"$student_id\",
@@ -299,55 +309,54 @@ calificar_estudiante() {
         \"aprobado\": $aprobado
       },
       \"desglose\": {
-        \"docker_compose\": { \"obtenido\": $docker_compose_pts, \"maximo\": 20 },
-        \"contenedores\": { \"obtenido\": $containers_pts, \"maximo\": 20 },
-        \"bases_datos\": { \"obtenido\": $databases_pts, \"maximo\": 15 },
-        \"symmetricds\": { \"obtenido\": $symmetricds_pts, \"maximo\": 15 },
-        \"replicacion\": { \"obtenido\": $replication_pts, \"maximo\": 30 }
+        \"docker_compose\": { \"obtenido\": $docker_compose_pts, \"maximo\": 30 },
+        \"contenedores\": { \"obtenido\": $contenedores_pts, \"maximo\": 25 },
+        \"bases_datos\": { \"obtenido\": $bd_funcionamiento_pts, \"maximo\": 20 },
+        \"symmetricds\": { \"obtenido\": $symmetricds_pts, \"maximo\": 25 }
       },
       \"detalles\": {
         \"tests_pasados\": $tests_passed,
         \"tests_totales\": $tests_total,
-        \"tablas_creadas\": 4,
-        \"tablas_requeridas\": 4,
+        \"tablas_negocio\": 4,
+        \"tablas_symmetricds_pg\": $sym_tables,
+        \"tablas_symmetricds_mysql\": $sym_tables_mysql,
         \"servicios_docker\": 4
       }
     }")
     
-    ((SUMA_CALIFICACIONES+=total_pts))
-    
-    # Generar reporte individual
+    # Reporte individual
     cat > "$RESULTS_DIR/${student_name// /_}_${student_id}.log" << EOF
 ============================================================
-REPORTE INDIVIDUAL DE CALIFICACIÓN
+REPORTE INDIVIDUAL - ARQUITECTURA
 ============================================================
 Estudiante: $student_name
 Cédula: $student_id
 Rama: $branch
 Fecha: $(date)
 
-CALIFICACIÓN:
+CALIFICACIÓN ARQUITECTURA:
   Total: $total_pts / 100
   Nota: $nota
   Estado: $([ "$aprobado" = "true" ] && echo "APROBADO ✓" || echo "REPROBADO ✗")
 
 DESGLOSE:
-  1. Docker Compose:      $docker_compose_pts / 20
-  2. Contenedores:        $containers_pts / 20
-  3. Bases de Datos:      $databases_pts / 15
-  4. SymmetricDS:         $symmetricds_pts / 15
-  5. Replicación:         $replication_pts / 30
+  1. Docker Compose (estructura)     $docker_compose_pts / 30
+  2. Contenedores (ejecución)        $contenedores_pts / 25
+  3. Bases de Datos (funcionamiento) $bd_funcionamiento_pts / 20
+  4. SymmetricDS (configuración)     $symmetricds_pts / 25
 
 ESTADÍSTICAS:
   Tests pasados: $tests_passed / $tests_total
   Porcentaje: ${percentage}%
+
+IMPORTANTE:
+  La replicación bidireccional (operaciones INSERT, UPDATE, DELETE)
+  debe demostrarse con capturas de pantalla según README.md
 ============================================================
 EOF
     
-    # Limpiar contenedores
+    # Limpiar
     docker compose down -v > /dev/null 2>&1 || true
-    
-    # Volver a main
     git checkout main > /dev/null 2>&1
 }
 
@@ -361,12 +370,12 @@ generate_consolidated_reports() {
         promedio=$((SUMA_CALIFICACIONES / TOTAL_ESTUDIANTES))
     fi
     
-    local porcentaje_aprobados=0
+    local porcentaje_aprobados="0.00"
     if [ $TOTAL_ESTUDIANTES -gt 0 ]; then
-        porcentaje_aprobados=$(awk "BEGIN {printf \"%.2f\", ($APROBADOS * 100.0 / $TOTAL_ESTUDIANTES)}")
+        porcentaje_aprobados=$(printf "%.2f" $(echo "$APROBADOS * 100 / $TOTAL_ESTUDIANTES" | bc -l))
     fi
     
-    # ========== JSON CONSOLIDADO ==========
+    # ========== JSON ==========
     local estudiantes_json=$(IFS=,; echo "${ESTUDIANTES[*]}")
     
     cat > "$RESULTS_DIR/calificaciones.json" << EOF
@@ -381,73 +390,78 @@ generate_consolidated_reports() {
     "reprobados": $REPROBADOS,
     "promedio": $promedio,
     "porcentaje_aprobados": $porcentaje_aprobados
-  }
+  },
+  "nota_importante": "La replicación se valida con capturas de pantalla (ver README.md)"
 }
 EOF
     
-    # ========== CSV CONSOLIDADO ==========
-    cat > "$RESULTS_DIR/calificaciones.csv" << 'EOF'
-nombre,cedula,rama,docker_compose,contenedores,bases_datos,symmetricds,replicacion,total,nota,aprobado
+    # ========== CSV ==========
+    cat > "$RESULTS_DIR/calificaciones.csv" << EOF
+nombre,cedula,rama,docker_compose,contenedores,bases_datos,symmetricds,total,nota,aprobado
 EOF
     
-    # Procesar cada estudiante para CSV
     for branch in $(git branch -r | grep 'origin/student/' | sed 's/origin\///'); do
-        git checkout "$branch" > /dev/null 2>&1
-        
-        local student_name=""
-        local student_id=""
         if [[ $branch =~ student/(.+)_(.+)_([0-9]+) ]]; then
-            student_name="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
-            student_id="${BASH_REMATCH[3]}"
-        fi
-        
-        # Buscar el log individual para extraer datos
-        if [ -f "$RESULTS_DIR/${student_name// /_}_${student_id}.log" ]; then
-            local total=$(grep "Total:" "$RESULTS_DIR/${student_name// /_}_${student_id}.log" | awk '{print $2}' | cut -d'/' -f1)
-            local nota=$(grep "Nota:" "$RESULTS_DIR/${student_name// /_}_${student_id}.log" | cut -d':' -f2 | xargs)
-            local aprobado=$(grep "Estado:" "$RESULTS_DIR/${student_name// /_}_${student_id}.log" | grep -q "APROBADO" && echo "true" || echo "false")
+            local sname="${BASH_REMATCH[1]} ${BASH_REMATCH[2]}"
+            local sid="${BASH_REMATCH[3]}"
             
-            local dc=$(grep "Docker Compose:" "$RESULTS_DIR/${student_name// /_}_${student_id}.log" | awk '{print $3}' | cut -d'/' -f1)
-            local cont=$(grep "Contenedores:" "$RESULTS_DIR/${student_name// /_}_${student_id}.log" | awk '{print $2}' | cut -d'/' -f1)
-            local db=$(grep "Bases de Datos:" "$RESULTS_DIR/${student_name// /_}_${student_id}.log" | awk '{print $4}' | cut -d'/' -f1)
-            local sym=$(grep "SymmetricDS:" "$RESULTS_DIR/${student_name// /_}_${student_id}.log" | awk '{print $2}' | cut -d'/' -f1)
-            local rep=$(grep "Replicación:" "$RESULTS_DIR/${student_name// /_}_${student_id}.log" | awk '{print $2}' | cut -d'/' -f1)
-            
-            echo "\"$student_name\",$student_id,$branch,$dc,$cont,$db,$sym,$rep,$total,\"$nota\",$aprobado" >> "$RESULTS_DIR/calificaciones.csv"
+            if [ -f "$RESULTS_DIR/${sname// /_}_${sid}.log" ]; then
+                local total=$(grep "Total:" "$RESULTS_DIR/${sname// /_}_${sid}.log" | awk '{print $2}' | cut -d'/' -f1 | xargs)
+                local nota=$(grep "Nota:" "$RESULTS_DIR/${sname// /_}_${sid}.log" | cut -d':' -f2 | xargs)
+                local aprobado=$(grep "Estado:" "$RESULTS_DIR/${sname// /_}_${sid}.log" | grep -q "APROBADO" && echo "true" || echo "false")
+                
+                local dc=$(grep "Docker Compose" "$RESULTS_DIR/${sname// /_}_${sid}.log" | grep ")" | awk '{print $5}' | cut -d'/' -f1 | xargs)
+                local cont=$(grep "Contenedores" "$RESULTS_DIR/${sname// /_}_${sid}.log" | grep ")" | awk '{print $3}' | cut -d'/' -f1 | xargs)
+                local db=$(grep "Bases de Datos" "$RESULTS_DIR/${sname// /_}_${sid}.log" | grep ")" | awk '{print $4}' | cut -d'/' -f1 | xargs)
+                local sym=$(grep "SymmetricDS" "$RESULTS_DIR/${sname// /_}_${sid}.log" | grep ")" | awk '{print $3}' | cut -d'/' -f1 | xargs)
+                
+                echo "\"$sname\",$sid,$branch,$dc,$cont,$db,$sym,$total,\"$nota\",$aprobado" >> "$RESULTS_DIR/calificaciones.csv"
+            fi
         fi
     done
     
-    git checkout main > /dev/null 2>&1
-    
-    # ========== RESUMEN TXT ==========
+    # ========== RESUMEN ==========
     cat > "$RESULTS_DIR/RESUMEN.txt" << EOF
 ╔═══════════════════════════════════════════════════════════════╗
 ║                                                               ║
 ║         REPORTE CONSOLIDADO DE CALIFICACIONES                ║
 ║         Examen: Replicación Bidireccional SymmetricDS        ║
+║         Evaluación: ARQUITECTURA (100 puntos)                ║
 ║                                                               ║
 ╚═══════════════════════════════════════════════════════════════╝
 
-Fecha de evaluación: $(date)
-Generado automáticamente por: calificar_todos.sh
+Fecha: $(date)
+Generado por: calificar_todos.sh
+
+NOTA IMPORTANTE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Esta calificación evalúa solo la ARQUITECTURA (100 pts).
+  
+  La REPLICACIÓN BIDIRECCIONAL debe demostrarse con capturas
+  de pantalla mostrando:
+    • INSERT en PostgreSQL → aparece en MySQL
+    • INSERT en MySQL → aparece en PostgreSQL
+    • UPDATE en ambas direcciones
+    • DELETE en ambas direcciones
+  
+  Ver README.md sección "Evidencias de Replicación"
 
 ESTADÍSTICAS GENERALES:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   Total de estudiantes:       $TOTAL_ESTUDIANTES
-  Aprobados:                  $APROBADOS
-  Reprobados:                 $REPROBADOS
+  Aprobados (≥60):            $APROBADOS
+  Reprobados (<60):           $REPROBADOS
   Promedio general:           $promedio / 100
   % Aprobación:               ${porcentaje_aprobados}%
 
-DISTRIBUCIÓN DE CALIFICACIONES:
+DISTRIBUCIÓN DE CALIFICACIONES (Solo Arquitectura):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 EOF
     
-    # Listar cada estudiante
     for logfile in "$RESULTS_DIR"/*.log; do
-        if [ -f "$logfile" ]; then
+        if [ -f "$logfile" ] && [[ "$logfile" != *"RESUMEN"* ]]; then
             local nombre=$(basename "$logfile" .log | sed 's/_/ /g')
-            local total=$(grep "Total:" "$logfile" | awk '{print $2}' | cut -d'/' -f1)
+            local total=$(grep "Total:" "$logfile" | awk '{print $2}' | cut -d'/' -f1 | xargs)
             local nota=$(grep "Nota:" "$logfile" | cut -d':' -f2 | xargs)
             echo "  • $nombre: $total pts - $nota" >> "$RESULTS_DIR/RESUMEN.txt"
         fi
@@ -457,17 +471,16 @@ EOF
 
 ARCHIVOS GENERADOS:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  → calificaciones.json    (Formato JSON para sistemas)
-  → calificaciones.csv     (Formato CSV para Excel)
+  → calificaciones.json    (JSON consolidado)
+  → calificaciones.csv     (CSV para Excel/Sheets)
   → RESUMEN.txt            (Este archivo)
   → *.log                  (Reportes individuales)
-
 ============================================================
 EOF
 }
 
 # ============================================
-# Función Principal
+# Main
 # ============================================
 
 main() {
@@ -476,36 +489,31 @@ main() {
     # Verificar que estamos en main
     local current_branch=$(git branch --show-current)
     if [ "$current_branch" != "main" ]; then
-        echo -e "${RED}Error: Debes ejecutar este script desde la rama main${NC}"
-        echo -e "${YELLOW}Ejecuta: git checkout main${NC}"
+        echo -e "${RED}Error: Ejecutar desde rama main${NC}"
         exit 1
     fi
     
     # Actualizar ramas
-    echo -e "${BLUE}Actualizando ramas del repositorio...${NC}"
+    echo -e "${BLUE}Actualizando ramas...${NC}"
     git fetch --all > /dev/null 2>&1
     
-    # Obtener todas las ramas de estudiantes
+    # Obtener ramas de estudiantes
     local student_branches=($(git branch -r | grep 'origin/student/' | sed 's/origin\///'))
     TOTAL_ESTUDIANTES=${#student_branches[@]}
     
     if [ $TOTAL_ESTUDIANTES -eq 0 ]; then
-        echo -e "${RED}No se encontraron ramas de estudiantes (student/*)${NC}"
-        echo -e "${YELLOW}Los estudiantes deben crear ramas con formato: student/nombre_apellido_cedula${NC}"
+        echo -e "${RED}No hay ramas student/*${NC}"
         exit 1
     fi
     
-    echo -e "${GREEN}✓ Encontradas $TOTAL_ESTUDIANTES rama(s) de estudiantes${NC}"
+    echo -e "${GREEN}✓ Encontradas $TOTAL_ESTUDIANTES rama(s)${NC}"
     echo ""
-    
-    # Mostrar ramas encontradas
-    echo -e "${BLUE}Ramas a calificar:${NC}"
     for branch in "${student_branches[@]}"; do
         echo -e "  • $branch"
     done
     echo ""
     
-    read -p "Presiona ENTER para comenzar la calificación o Ctrl+C para cancelar..."
+    read -p "Presiona ENTER para comenzar..."
     echo ""
     
     # Calificar cada estudiante
@@ -515,49 +523,37 @@ main() {
         echo -e "${CYAN}${BOLD}[Estudiante $counter / $TOTAL_ESTUDIANTES]${NC}"
         calificar_estudiante "$branch"
         ((counter++))
-        sleep 2
     done
     
-    # Generar reportes consolidados
+    # Reportes consolidados
     echo ""
-    echo -e "${BLUE}${BOLD}Generando reportes consolidados...${NC}"
+    echo -e "${BLUE}${BOLD}Generando reportes...${NC}"
     generate_consolidated_reports
     
-    # Mostrar resumen final
+    # Resumen final
     echo ""
     echo -e "${GREEN}${BOLD}╔═══════════════════════════════════════════════════════════════╗${NC}"
-    echo -e "${GREEN}${BOLD}║                                                               ║${NC}"
-    echo -e "${GREEN}${BOLD}║            ✓ CALIFICACIÓN COMPLETADA                          ║${NC}"
-    echo -e "${GREEN}${BOLD}║                                                               ║${NC}"
+    echo -e "${GREEN}${BOLD}║         ✓ CALIFICACIÓN COMPLETADA                            ║${NC}"
     echo -e "${GREEN}${BOLD}╚═══════════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    echo -e "${BLUE}Estudiantes calificados: ${BOLD}$TOTAL_ESTUDIANTES${NC}"
-    echo -e "${GREEN}Aprobados: ${BOLD}$APROBADOS${NC}"
-    echo -e "${RED}Reprobados: ${BOLD}$REPROBADOS${NC}"
+    echo -e "${BLUE}Estudiantes: ${BOLD}$TOTAL_ESTUDIANTES${NC} | ${GREEN}Aprobados: ${BOLD}$APROBADOS${NC} | ${RED}Reprobados: ${BOLD}$REPROBADOS${NC}"
     echo ""
-    echo -e "${CYAN}${BOLD}📁 Resultados guardados en:${NC} ${YELLOW}$RESULTS_DIR/${NC}"
+    echo -e "${CYAN}${BOLD}📁 Resultados: ${YELLOW}$RESULTS_DIR/${NC}"
     echo ""
-    echo -e "${BLUE}Archivos generados:${NC}"
-    echo -e "  → ${CYAN}$RESULTS_DIR/calificaciones.json${NC}  (JSON consolidado)"
-    echo -e "  → ${CYAN}$RESULTS_DIR/calificaciones.csv${NC}   (CSV para Excel)"
-    echo -e "  → ${CYAN}$RESULTS_DIR/RESUMEN.txt${NC}          (Resumen legible)"
-    echo -e "  → ${CYAN}$RESULTS_DIR/*.log${NC}                (Reportes individuales)"
+    echo -e "${BLUE}Archivos:${NC}"
+    echo -e "  → ${CYAN}calificaciones.json${NC}  (JSON)"
+    echo -e "  → ${CYAN}calificaciones.csv${NC}   (CSV)"
+    echo -e "  → ${CYAN}RESUMEN.txt${NC}          (Resumen)"
+    echo -e "  → ${CYAN}*.log${NC}                (Individuales)"
     echo ""
     
-    # Mostrar contenido del JSON
-    echo -e "${YELLOW}${BOLD}📄 Contenido del JSON:${NC}"
+    # Mostrar JSON
+    echo -e "${YELLOW}${BOLD}📄 JSON Generado:${NC}"
     echo -e "${CYAN}─────────────────────────────────────────────────────────────${NC}"
     cat "$RESULTS_DIR/calificaciones.json"
     echo -e "${CYAN}─────────────────────────────────────────────────────────────${NC}"
     echo ""
-    
-    # Mostrar quick stats
-    echo -e "${BLUE}${BOLD}📊 Estadísticas Rápidas:${NC}"
-    echo -e "   Promedio: $(awk "BEGIN {printf \"%.2f\", ($SUMA_CALIFICACIONES / $TOTAL_ESTUDIANTES)}")/100"
-    echo -e "   Aprobación: $(awk "BEGIN {printf \"%.2f\", ($APROBADOS * 100.0 / $TOTAL_ESTUDIANTES)}")%"
-    echo ""
 }
 
-# Ejecutar
 main
 exit 0

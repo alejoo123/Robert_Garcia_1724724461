@@ -276,39 +276,100 @@ El script calificará automáticamente (100 puntos total):
 TOTAL:                        95 / 100
 ```
 
-## ✅ Criterios de Evaluación (100 puntos + 20 BONUS)
+## ✅ Criterios de Evaluación (100 puntos)
 
-### Evaluación Automática con `grade.sh`
+### Sistema de Calificación
+
+Este examen se divide en **2 partes**:
+
+#### Parte 1: ARQUITECTURA (100 puntos) - Calificación Automática
+
+El script `calificar_todos.sh` evalúa automáticamente:
 
 | Sección | Puntos | Qué se evalúa |
 |---------|--------|---------------|
-| **1. Docker Compose** | 40 | • Archivo existe y sintaxis válida (10 pts)<br>• 4 servicios definidos (20 pts)<br>• Red configurada (5 pts)<br>• Volúmenes montados (5 pts) |
-| **2. Config América** | 30 | • symmetric.properties completo (10 pts)<br>• Conexión PostgreSQL correcta (5 pts)<br>• america.properties con SQL (15 pts) |
-| **3. Config Europa** | 30 | • symmetric.properties completo (15 pts)<br>• Conexión MySQL correcta (5 pts)<br>• registration.url correcto (5 pts)<br>• Jobs habilitados (5 pts) |
-| **4. BONUS Funcional** | +20 | • Contenedores inician (4 pts)<br>• Conexiones BD funcionan (4 pts)<br>• Tablas SymmetricDS creadas (6 pts)<br>• Nodo Europa registrado (6 pts) |
-| **TOTAL POSIBLE** | **120** | **Calificación se normaliza a 100** |
+| **1. Docker Compose** | 30 | • Archivo existe (10 pts)<br>• Sintaxis YAML válida (10 pts)<br>• 4 servicios definidos (10 pts) |
+| **2. Contenedores** | 25 | • postgres-america corriendo (6 pts)<br>• mysql-europe corriendo (6 pts)<br>• symmetricds-america corriendo (7 pts)<br>• symmetricds-europe corriendo (6 pts) |
+| **3. Bases de Datos** | 20 | • Conexión PostgreSQL (7 pts)<br>• 4 tablas creadas en PostgreSQL (6 pts)<br>• Conexión MySQL (7 pts) |
+| **4. SymmetricDS** | 25 | • Tablas SymmetricDS en PostgreSQL (10 pts)<br>• Tablas SymmetricDS en MySQL (10 pts)<br>• Grupos de nodos configurados (5 pts) |
+| **TOTAL** | **100** | |
+
+#### Parte 2: EVIDENCIAS DE REPLICACIÓN (Entrega Manual)
+
+**IMPORTANTE:** Además de la arquitectura, debes demostrar que la replicación funciona con **capturas de pantalla** que muestren:
+
+**📸 Capturas Requeridas:**
+
+1. **INSERT: PostgreSQL → MySQL** (Captura 1)
+   ```bash
+   # En PostgreSQL, insertar:
+   docker exec -it postgres-america psql -U symmetricds -d globalshop
+   INSERT INTO products VALUES ('DEMO-001', 'Producto Demo', 'Demo', 99.99, 'Demo', true, NOW(), NOW());
+   SELECT * FROM products WHERE product_id = 'DEMO-001';
+   ```
+   
+   ```bash
+   # En MySQL, verificar que aparece:
+   docker exec -it mysql-europe mysql -u symmetricds -psymmetricds globalshop
+   SELECT * FROM products WHERE product_id = 'DEMO-001';
+   ```
+   **Captura:** Debes mostrar AMBAS consultas (PostgreSQL con INSERT y MySQL con SELECT mostrando el dato replicado)
+
+2. **INSERT: MySQL → PostgreSQL** (Captura 2)
+   ```bash
+   # En MySQL, insertar:
+   INSERT INTO customers VALUES ('DEMO-CUST', 'demo@test.com', 'Cliente Demo', 'Spain', NOW(), 1, NOW());
+   SELECT * FROM customers WHERE customer_id = 'DEMO-CUST';
+   ```
+   
+   ```bash
+   # En PostgreSQL, verificar:
+   SELECT * FROM customers WHERE customer_id = 'DEMO-CUST';
+   ```
+   **Captura:** Ambas consultas mostrando la replicación inversa
+
+3. **UPDATE Bidireccional** (Captura 3)
+   ```bash
+   # Actualizar en PostgreSQL:
+   UPDATE products SET base_price = 149.99 WHERE product_id = 'DEMO-001';
+   ```
+   
+   ```bash
+   # Verificar en MySQL que el precio cambió:
+   SELECT product_id, base_price FROM products WHERE product_id = 'DEMO-001';
+   ```
+   **Captura:** Mostrar el UPDATE y la verificación
+
+4. **DELETE Bidireccional** (Captura 4)
+   ```bash
+   # Eliminar en MySQL:
+   DELETE FROM customers WHERE customer_id = 'DEMO-CUST';
+   ```
+   
+   ```bash
+   # Verificar en PostgreSQL que se eliminó:
+   SELECT COUNT(*) FROM customers WHERE customer_id = 'DEMO-CUST';
+   -- Debe retornar 0
+   ```
+   **Captura:** Mostrar el DELETE y la verificación
+
+**Formato de las capturas:**
+- Deben ser legibles (texto visible)
+- Incluir timestamp o comando completo
+- Mostrar AMBAS bases de datos en cada operación
+- Guardar como: `capturas/01_insert_pg_mysql.png`, `02_insert_mysql_pg.png`, etc.
 
 ### Escala de Calificación
 
-- **90-100**: Excelente (A) - Todo funciona perfectamente
-- **80-89**: Bueno (B) - Configuración correcta con errores menores
-- **70-79**: Aceptable (C) - Configuración básica funcional
-- **60-69**: Suficiente (D) - Configuración incompleta pero demuestra comprensión
-- **<60**: Insuficiente (F) - Configuración incorrecta o no funcional
+**Calificación Final = Arquitectura + Evidencias**
 
-### Cómo Calificar
+- **90-100**: Excelente (A)
+- **80-89**: Bueno (B)  
+- **70-79**: Aceptable (C)
+- **60-69**: Suficiente (D)
+- **<60**: Insuficiente (F)
 
-**Opción 1: Automática (RECOMENDADA)**
-```bash
-./grade.sh
-# Genera reporte completo en 3 minutos
-```
-
-**Opción 2: Manual**
-1. Revisar archivos de configuración
-2. Ejecutar `docker-compose up -d`
-3. Ejecutar `./validation/validate.sh`
-4. Asignar puntos según rúbrica
+**Si no presentas las capturas de replicación, tu calificación máxima será la de arquitectura únicamente.**
 
 ## 📚 Recursos y Referencias
 
